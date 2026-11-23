@@ -1,0 +1,32 @@
+{
+  "name": "HippoSeg Decathlon",
+  "tagline": "3D hippocampus segmentation on noisy MRI with noisy training labels, built on the Medical Segmentation Decathlon (Task04).",
+  "task": "Task04_Hippocampus",
+  "source_url": "https://msd-for-monai.s3-us-west-2.amazonaws.com/Task04_Hippocampus.tar",
+  "labels": {
+    "0": "background",
+    "1": "anterior",
+    "2": "posterior"
+  },
+  "split": {
+    "seed": 2026,
+    "val_fraction": 0.1,
+    "test_fraction": 0.2
+  },
+  "metric": {
+    "primary": "dice_mean",
+    "tiebreak": "nsd_mean",
+    "nsd_tolerance_mm": 1.0
+  },
+  "max_submissions_per_team": 3,
+  "max_submission_bytes": 26214400,
+  "max_uncompressed_bytes": 268435456,
+  "noise": {
+    "rician_sigma_range": [
+      0.02,
+      0.1
+    ],
+    "bias_field_strength": 0.25,
+    "train_label_noise_fraction": 0.25
+  }
+}

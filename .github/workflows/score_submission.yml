@@ -1,0 +1,139 @@
+name: Score submission
+
+# Runs on PRs that touch the submission inbox. pull_request_target is used so the
+# job can read the SUBMISSION_PRIVATE_KEY secret for fork PRs. SECURITY: code from
+# the PR is NEVER executed - only the two data files are read, by scripts from main.
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+    paths:
+      - "submissions/inbox/**"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: leaderboard-update
+  cancel-in-progress: false
+
+jobs:
+  score:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check PR only adds one submission
+        id: detect
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner: context.repo.owner, repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number, per_page: 100,
+            });
+            const NAME = "[A-Za-z0-9][A-Za-z0-9_.-]{1,39}";
+            const re = new RegExp(`^submissions/inbox/(${NAME})/(${NAME})/(predictions\\.npz\\.enc|metadata\\.json)$`);
+            const fail = (msg) => { core.setOutput("error", msg); core.setFailed(msg); };
+
+            const bad = files.filter(f => !re.test(f.filename) || !["added", "modified"].includes(f.status));
+            if (bad.length) {
+              return fail("A submission PR may only add `predictions.npz.enc` and `metadata.json` under " +
+                "`submissions/inbox/<team>/<run_id>/`. Not allowed:\n" + bad.map(f => `- \`${f.filename}\` (${f.status})`).join("\n"));
+            }
+            const dirs = [...new Set(files.map(f => f.filename.split("/").slice(0, 4).join("/")))];
+            const names = files.map(f => f.filename.split("/")[4]).sort().join(",");
+            if (dirs.length !== 1 || names !== "metadata.json,predictions.npz.enc") {
+              return fail("The PR must contain exactly one run folder with both `predictions.npz.enc` and `metadata.json`.");
+            }
+            core.setOutput("run_dir", dirs[0]);
+
+      - name: Checkout main (trusted scoring code)
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: repo_main
+
+      - name: Checkout submission files only (untrusted data)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: repo_pr
+          persist-credentials: false
+          sparse-checkout: ${{ steps.detect.outputs.run_dir }}
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install scoring dependencies
+        run: pip install --quiet numpy scipy cryptography
+
+      - name: Score
+        id: score
+        env:
+          SUBMISSION_PRIVATE_KEY: ${{ secrets.SUBMISSION_PRIVATE_KEY }}
+          RUN_DIR: ${{ steps.detect.outputs.run_dir }}
+        run: |
+          set -e
+          if [ -z "$SUBMISSION_PRIVATE_KEY" ]; then echo "Missing secret SUBMISSION_PRIVATE_KEY"; exit 1; fi
+          umask 077
+          printf '%s\n' "$SUBMISSION_PRIVATE_KEY" > "$RUNNER_TEMP/key.pem"
+          python repo_main/scoring/evaluate_submission.py \
+            --run-dir "repo_pr/$RUN_DIR" \
+            --private-key "$RUNNER_TEMP/key.pem" \
+            --result "$RUNNER_TEMP/result.json"
+
+      - name: Commit leaderboard to main
+        id: commit
+        env:
+          RUN_DIR: ${{ steps.detect.outputs.run_dir }}
+        run: |
+          set -e
+          cd repo_main
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add leaderboard docs/leaderboard.csv submissions/scored
+          git commit -m "Leaderboard: score ${RUN_DIR#submissions/inbox/}"
+          for i in 1 2 3; do git pull --rebase origin main && git push origin HEAD:main && exit 0; sleep 5; done
+          exit 1
+
+      - name: Remove private key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/key.pem"
+
+      - name: Comment on PR
+        if: always()
+        uses: actions/github-script@v7
+        env:
+          DETECT_ERROR: ${{ steps.detect.outputs.error }}
+          COMMIT_OUTCOME: ${{ steps.commit.outcome }}
+        with:
+          script: |
+            const fs = require("fs");
+            const path = `${process.env.RUNNER_TEMP}/result.json`;
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const pages = `https://${context.repo.owner}.github.io/${context.repo.repo}/#leaderboard`;
+            let body, ok = false;
+            if (fs.existsSync(path)) {
+              const r = JSON.parse(fs.readFileSync(path, "utf8"));
+              if (r.status === "ok" && process.env.COMMIT_OUTCOME !== "success") {
+                body = `### ⚠️ Scored, but the leaderboard could not be updated\n\nAn organizer will re-run this job. ([logs](${runUrl}))`;
+              } else if (r.status === "ok") {
+                ok = true;
+                const s = r.scores, f = (x) => Number(x).toFixed(4);
+                const per = Object.keys(s).filter(k => /^(dice|nsd)_/.test(k) && !k.endsWith("_mean"))
+                  .map(k => `| ${k} | ${f(s[k])} |`).join("\n");
+                body = `### ✅ Submission scored: \`${r.team}/${r.run_id}\`\n\n` +
+                  `| Metric | Score |\n|---|---:|\n| **Dice (mean)** | **${f(s.dice_mean)}** |\n| NSD (mean) | ${f(s.nsd_mean)} |\n${per}\n\n` +
+                  `Team rank: **#${r.team_rank}** of ${r.n_teams} · submissions used: ${r.submissions_used}/${r.submissions_max}\n\n` +
+                  `[Leaderboard](${pages}) is updated. This PR is closed automatically, no merge needed.`;
+              } else {
+                body = `### ❌ Submission rejected\n\n${r.message}\n\nFix it and push to this branch to re-run. ([logs](${runUrl}))`;
+              }
+            } else {
+              body = `### ❌ Submission rejected\n\n${process.env.DETECT_ERROR || "The scoring job failed before scoring."}\n\n([logs](${runUrl}))`;
+            }
+            const pr = context.payload.pull_request.number;
+            await github.rest.issues.createComment({ ...context.repo, issue_number: pr, body });
+            if (ok) await github.rest.pulls.update({ ...context.repo, pull_number: pr, state: "closed" });

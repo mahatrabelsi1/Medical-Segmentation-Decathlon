@@ -1,0 +1,7 @@
+{
+  "team": "your_team_name",
+  "run_id": "run_01",
+  "author_type": "human",
+  "model": "3D U-Net",
+  "notes": ""
+}

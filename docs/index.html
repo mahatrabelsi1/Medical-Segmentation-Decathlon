@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HippoSeg Decathlon</title>
+<meta name="description" content="3D hippocampus segmentation challenge on MRI, built on the Medical Segmentation Decathlon (Task04).">
+<style>
+  :root{
+    --bg:#f6f7f9; --surface:#ffffff; --surface-2:#f0f2f5; --text:#14181f; --muted:#5b6472;
+    --line:#e3e6eb; --accent:#0f766e; --accent-soft:#ccfbf1; --accent-text:#ffffff;
+    --ant:#2563eb; --post:#d97706; --gold:#b7791f; --silver:#6b7280; --bronze:#9a5b34;
+    --code-bg:#f0f2f5; --radius:12px;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0d1117; --surface:#151b23; --surface-2:#1c232d; --text:#e6e9ee; --muted:#9aa4b2;
+      --line:#2a323d; --accent:#2dd4bf; --accent-soft:#0f3d3a; --accent-text:#05201d;
+      --ant:#60a5fa; --post:#fbbf24; --gold:#f2c94c; --silver:#c0c6cf; --bronze:#d08a5c; --code-bg:#1c232d;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0d1117; --surface:#151b23; --surface-2:#1c232d; --text:#e6e9ee; --muted:#9aa4b2;
+    --line:#2a323d; --accent:#2dd4bf; --accent-soft:#0f3d3a; --accent-text:#05201d;
+    --ant:#60a5fa; --post:#fbbf24; --gold:#f2c94c; --silver:#c0c6cf; --bronze:#d08a5c; --code-bg:#1c232d;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font:15px/1.6 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  a{color:var(--accent)}
+  code,pre{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px}
+  code{background:var(--code-bg);padding:1px 5px;border-radius:5px}
+  pre{background:var(--code-bg);padding:14px 16px;border-radius:10px;overflow-x:auto;line-height:1.5;margin:10px 0 18px}
+  pre code{background:none;padding:0}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 16px}
+
+  /* header */
+  .hero{background:var(--surface);border-bottom:1px solid var(--line)}
+  .hero .wrap{display:flex;gap:28px;align-items:center;padding-top:32px;padding-bottom:24px}
+  .hero h1{margin:0 0 6px;font-size:30px;letter-spacing:-.02em;line-height:1.2}
+  .hero p{margin:0;color:var(--muted);max-width:620px}
+  .badges{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+  .badge{font-size:12px;padding:3px 10px;border-radius:999px;background:var(--surface-2);color:var(--muted);border:1px solid var(--line)}
+  .badge.live{background:var(--accent-soft);color:var(--accent);border-color:transparent;font-weight:600}
+  .hero-art{flex:0 0 150px}
+  .hero-art svg{width:150px;height:auto;display:block}
+  .hero-cta{margin-left:auto;display:flex;flex-direction:column;gap:8px;align-self:flex-start}
+  .btn{display:inline-block;text-align:center;padding:9px 16px;border-radius:8px;font-weight:600;font-size:14px;
+    text-decoration:none;border:1px solid var(--line);color:var(--text);background:var(--surface);white-space:nowrap}
+  .btn.primary{background:var(--accent);color:var(--accent-text);border-color:var(--accent)}
+  .theme-toggle{background:none;border:1px solid var(--line);color:var(--muted);border-radius:8px;padding:6px 10px;cursor:pointer;font-size:13px}
+
+  /* tabs */
+  nav.tabs{position:sticky;top:0;z-index:5;background:var(--surface);border-bottom:1px solid var(--line)}
+  nav.tabs .wrap{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none}
+  nav.tabs a{padding:12px 14px;text-decoration:none;color:var(--muted);font-weight:600;font-size:14px;
+    border-bottom:2px solid transparent;white-space:nowrap}
+  nav.tabs a[aria-selected="true"]{color:var(--text);border-bottom-color:var(--accent)}
+  section.tab{display:none;padding:28px 0 64px}
+  section.tab.active{display:block}
+  h2{font-size:20px;margin:28px 0 10px;letter-spacing:-.01em}
+  h2:first-child{margin-top:0}
+  h3{font-size:16px;margin:22px 0 6px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:8px 0 20px}
+  .stat{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px}
+  .stat b{display:block;font-size:24px;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+  .stat span{color:var(--muted);font-size:13px}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;margin:12px 0}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  ol.steps{padding-left:20px} ol.steps li{margin:6px 0}
+  table.simple{border-collapse:collapse;width:100%;font-size:14px}
+  table.simple th,table.simple td{border-bottom:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+  .muted{color:var(--muted)}
+  .swatch{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:0}
+
+  /* leaderboard */
+  .lb-controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+  .lb-controls input{flex:1 1 200px;min-width:0;padding:8px 12px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--text);font:inherit}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .seg button{background:var(--surface);color:var(--muted);border:0;padding:7px 12px;font:inherit;font-size:13px;cursor:pointer}
+  .seg button[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent);font-weight:600}
+  .table-scroll{overflow-x:auto;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface)}
+  table.lb{border-collapse:collapse;width:100%;min-width:760px;font-size:14px}
+  table.lb th{position:sticky;top:0;background:var(--surface-2);text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);padding:10px 12px;cursor:pointer;user-select:none;white-space:nowrap}
+  table.lb td{padding:10px 12px;border-top:1px solid var(--line);vertical-align:top}
+  table.lb td.num,table.lb th.num{text-align:right;font-variant-numeric:tabular-nums}
+  table.lb tr:hover td{background:var(--surface-2)}
+  .rank{display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:28px;border-radius:50%;font-weight:700;font-size:13px;background:var(--surface-2)}
+  .r1{background:var(--gold);color:#1a1200}.r2{background:var(--silver);color:#111}.r3{background:var(--bronze);color:#fff}
+  .team{font-weight:600}
+  .sub{color:var(--muted);font-size:12px;max-width:360px}
+  .chip{font-size:11px;padding:2px 8px;border-radius:999px;border:1px solid var(--line);color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+  .bar{height:4px;border-radius:2px;background:var(--surface-2);margin-top:5px;overflow:hidden}
+  .bar i{display:block;height:100%;background:var(--accent)}
+  .empty{padding:36px;text-align:center;color:var(--muted)}
+
+  @media (max-width:720px){
+    .hero .wrap{flex-direction:column;align-items:flex-start;gap:14px}
+    .hero-art{display:none}
+    .hero-cta{margin-left:0;flex-direction:row;flex-wrap:wrap}
+    .two{grid-template-columns:1fr}
+    .hero h1{font-size:24px}
+  }
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="wrap">
+    <div class="hero-art" aria-hidden="true">
+      <svg viewBox="0 0 120 120">
+        <rect x="4" y="4" width="112" height="112" rx="14" fill="var(--surface-2)" stroke="var(--line)"/>
+        <g opacity=".35" stroke="var(--muted)" stroke-width=".6">
+          <path d="M4 34h112M4 60h112M4 86h112M34 4v112M60 4v112M86 4v112"/>
+        </g>
+        <path d="M28 76c6-20 22-34 40-36 12-1 22 4 26 12" fill="none" stroke="var(--ant)" stroke-width="11" stroke-linecap="round"/>
+        <path d="M86 56c4 10 2 22-8 30-8 6-20 8-30 4" fill="none" stroke="var(--post)" stroke-width="9" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div>
+      <h1>HippoSeg Decathlon</h1>
+      <p>Segment the <strong>anterior</strong> and <strong>posterior</strong> hippocampus in 3D brain MRI.
+        A prediction-only competition built on Task04 of the
+        <a href="http://medicaldecathlon.com" target="_blank" rel="noopener">Medical Segmentation Decathlon</a>.
+        Train anywhere, submit encrypted masks by Pull Request, get scored automatically.</p>
+      <div class="badges">
+        <span class="badge live">● Open for submissions</span>
+        <span class="badge">3D segmentation</span>
+        <span class="badge">MRI</span>
+        <span class="badge">Noisy images + labels</span>
+        <span class="badge">Metric: mean Dice</span>
+        <span class="badge" id="teamsBadge">— teams</span>
+      </div>
+    </div>
+    <div class="hero-cta">
+      <a class="btn primary" href="#submit" data-tab-link>How to submit</a>
+      <a class="btn" id="repoBtn" href="#" target="_blank" rel="noopener">GitHub repo</a>
+      <button class="theme-toggle" id="themeToggle" type="button">Toggle theme</button>
+    </div>
+  </div>
+</header>
+
+<nav class="tabs" aria-label="Competition sections">
+  <div class="wrap" role="tablist">
+    <a href="#overview" role="tab">Overview</a>
+    <a href="#data" role="tab">Data</a>
+    <a href="#evaluation" role="tab">Evaluation</a>
+    <a href="#leaderboard" role="tab">Leaderboard</a>
+    <a href="#submit" role="tab">Submit</a>
+    <a href="#rules" role="tab">Rules</a>
+  </div>
+</nav>
+
+<main class="wrap">
+  <!-- OVERVIEW -->
+  <section class="tab" id="overview">
+    <h2>The task</h2>
+    <p>The hippocampus is a small structure in the brain's temporal lobe. Its volume and shape are
+      biomarkers for Alzheimer's disease, epilepsy and schizophrenia, but manual tracing is slow and varies between raters.
+      Each case is a cropped T1-weighted MRI volume around one hippocampus. <strong>The images carry realistic MRI noise and some
+      training labels are wrong at the boundaries</strong>: your model has to be robust to both. Your model must label every voxel as
+      <span class="swatch" style="background:var(--ant)"></span><strong>anterior</strong> (head),
+      <span class="swatch" style="background:var(--post)"></span><strong>posterior</strong> (body + tail) or background.</p>
+    <div class="grid">
+      <div class="stat"><b>182</b><span>training volumes</span></div>
+      <div class="stat"><b>26</b><span>validation volumes</span></div>
+      <div class="stat"><b>52</b><span>hidden test volumes</span></div>
+      <div class="stat"><b>3</b><span>submissions per team</span></div>
+    </div>
+    <h2>How it works</h2>
+    <div class="two">
+      <div class="card"><h3>1 · Train locally</h3><p class="muted">Fork the repo. Images and labels are in <code>data/public/</code>. Use any framework or method (nnU-Net, MONAI, your own). A small 3D U-Net starter is included.</p></div>
+      <div class="card"><h3>2 · Predict the test set</h3><p class="muted">Segment the 52 volumes in <code>data/public/imagesTs/</code>. Their labels are hidden and encrypted.</p></div>
+      <div class="card"><h3>3 · Submit by Pull Request</h3><p class="muted">One command packs and encrypts your masks. Open a PR with the two generated files.</p></div>
+      <div class="card"><h3>4 · Get scored</h3><p class="muted">GitHub Actions decrypts and scores your submission, comments the result on your PR and updates this leaderboard within minutes.</p></div>
+    </div>
+  </section>
+
+  <!-- DATA -->
+  <section class="tab" id="data">
+    <h2>Source</h2>
+    <p>Data comes from <strong>Task04_Hippocampus</strong> of the Medical Segmentation Decathlon
+      (Vanderbilt University Medical Center, mono-modal MRI, licence CC-BY-SA 4.0). The official MSD test labels were never
+      released, so this competition splits the <strong>260 labelled MSD cases</strong> into train / validation / hidden test
+      with a fixed seed. Test images are renamed to anonymous ids.</p>
+    <h2>Files</h2>
+<pre><code>data/public/
+├── imagesTr/hippocampus_XXX.nii.gz   # train + val images (208)
+├── labelsTr/hippocampus_XXX.nii.gz   # train + val labels
+├── imagesTs/test_XXX.nii.gz          # test images (52), labels hidden
+├── train.csv                         # case ids for training (182)
+├── val.csv                           # case ids for validation (26)
+├── test_cases.csv                    # test ids + expected shape + voxel spacing
+└── dataset.json
+data/hidden/test_labels.npz.enc       # encrypted ground truth (CI only)</code></pre>
+    <h2>Labels</h2>
+    <table class="simple">
+      <tr><th>Value</th><th>Class</th></tr>
+      <tr><td>0</td><td>background</td></tr>
+      <tr><td>1</td><td><span class="swatch" style="background:var(--ant)"></span>anterior hippocampus</td></tr>
+      <tr><td>2</td><td><span class="swatch" style="background:var(--post)"></span>posterior hippocampus</td></tr>
+    </table>
+    <p class="muted">Volumes are small (about 35 × 50 × 35 voxels at 1 mm isotropic), so you can train on a laptop CPU.</p>
+    <h2>Noise: the twist</h2>
+    <p>This is a <strong>robustness benchmark</strong>. The data is deliberately corrupted:</p>
+    <table class="simple">
+      <tr><th>Noise</th><th>Applied to</th><th>Details</th></tr>
+      <tr><td>MRI bias field</td><td>all images</td><td>smooth multiplicative intensity drift, up to about ±25%</td></tr>
+      <tr><td>Rician noise</td><td>all images</td><td>MR magnitude noise. Sigma is 2-10% of the 99th-percentile intensity and varies per case</td></tr>
+      <tr><td>Label noise</td><td>25% of <strong>training</strong> labels (not disclosed which)</td><td>each class randomly eroded or dilated by 1 voxel</td></tr>
+      <tr><td>Clean</td><td>validation + hidden test labels</td><td>so scores measure true error</td></tr>
+    </table>
+  </section>
+
+  <!-- EVALUATION -->
+  <section class="tab" id="evaluation">
+    <h2>Primary metric: mean Dice</h2>
+    <p>For every test case and each foreground class <em>c</em> ∈ {anterior, posterior}:</p>
+    <pre><code>Dice_c = 2·|P_c ∩ G_c| / (|P_c| + |G_c|)        (1.0 if both are empty)</code></pre>
+    <p>Each class's Dice is averaged over the 52 test cases, then the two classes are averaged.
+      <strong>Higher is better.</strong></p>
+    <h2>Tie-break: Normalised Surface Distance (NSD)</h2>
+    <p>NSD is the second MSD metric. It is the fraction of boundary voxels of the prediction and of the
+      ground truth that lie within <strong>1 mm</strong> of the other surface. It rewards accurate boundaries.
+      It is averaged the same way as Dice and is used only to break ties.</p>
+    <h2>Check yourself on validation</h2>
+<pre><code>python scoring/score_local.py --pred-dir runs/my_model/val</code></pre>
+    <p class="muted">This uses exactly the same metric code as the official scorer (<code>scoring/metrics.py</code>).</p>
+  </section>
+
+  <!-- LEADERBOARD -->
+  <section class="tab" id="leaderboard">
+    <div class="lb-controls">
+      <input id="q" type="search" placeholder="Search team or model…" aria-label="Search leaderboard">
+      <div class="seg" role="group" aria-label="View">
+        <button type="button" data-view="best" aria-pressed="true">Best per team</button>
+        <button type="button" data-view="all" aria-pressed="false">All runs</button>
+      </div>
+      <div class="seg" role="group" aria-label="Author type">
+        <button type="button" data-author="" aria-pressed="true">All</button>
+        <button type="button" data-author="human" aria-pressed="false">Human</button>
+        <button type="button" data-author="hybrid" aria-pressed="false">Hybrid</button>
+        <button type="button" data-author="llm" aria-pressed="false">LLM</button>
+      </div>
+    </div>
+    <div class="table-scroll">
+      <table class="lb">
+        <thead><tr>
+          <th data-sort="rank" class="num">#</th>
+          <th data-sort="team">Team</th>
+          <th data-sort="model">Model</th>
+          <th data-sort="dice_mean" class="num">Dice</th>
+          <th data-sort="nsd_mean" class="num">NSD</th>
+          <th data-sort="dice_anterior" class="num">Dice ant.</th>
+          <th data-sort="dice_posterior" class="num">Dice post.</th>
+          <th data-sort="submitted_at">Submitted</th>
+        </tr></thead>
+        <tbody id="lbBody"><tr><td colspan="8" class="empty">Loading leaderboard…</td></tr></tbody>
+      </table>
+    </div>
+    <p class="muted" style="font-size:13px;margin-top:10px">Ranked by mean Dice, ties broken by NSD. Updated automatically
+      when a submission PR is scored. <a href="leaderboard.csv">Download CSV</a>.</p>
+  </section>
+
+  <!-- SUBMIT -->
+  <section class="tab" id="submit">
+    <h2>Submit in 4 steps</h2>
+    <ol class="steps">
+      <li><strong>Fork</strong> the repository and clone your fork, then run <code>pip install -r requirements.txt</code>.</li>
+      <li><strong>Predict</strong> every test case and save one label map per case as
+        <code>&lt;case_id&gt;.nii.gz</code> (e.g. <code>test_001.nii.gz</code>), with the same shape as the image and values in {0, 1, 2}.</li>
+      <li><strong>Package and encrypt</strong>:
+<pre><code>python starter/make_submission.py --pred-dir runs/my_model/test \
+    --team my_team --run-id unet_v1 --author-type human \
+    --model "3D U-Net" --notes "CE + Dice loss, flip TTA"</code></pre>
+        This checks your masks with the official validator and writes
+        <code>submissions/inbox/my_team/unet_v1/predictions.npz.enc</code> and <code>metadata.json</code>.</li>
+      <li><strong>Open a Pull Request</strong> to <code>main</code> that contains only those two files. The bot scores it,
+        comments your result and closes the PR. You do not need to merge it.</li>
+    </ol>
+    <h2>Want a baseline?</h2>
+<pre><code>pip install torch
+python starter/baseline_unet.py --epochs 40 --out runs/baseline
+python scoring/score_local.py --pred-dir runs/baseline/val</code></pre>
+    <h2>metadata.json</h2>
+<pre><code>{
+  "team": "my_team",            // must match the folder name
+  "run_id": "unet_v1",          // must match the folder name, unique per team
+  "author_type": "human",       // human | llm | hybrid
+  "model": "3D U-Net",
+  "notes": "optional, up to 500 chars"
+}</code></pre>
+  </section>
+
+  <!-- RULES -->
+  <section class="tab" id="rules">
+    <h2>Rules</h2>
+    <table class="simple">
+      <tr><td><strong>Submissions</strong></td><td>At most <strong>3 scored runs per team</strong>. Each run needs a new <code>run_id</code>. Your best run counts.</td></tr>
+      <tr><td><strong>Data</strong></td><td>Train only on <code>data/public/</code>. Do not use the original, clean MSD release in any way: not to recover test labels and not to replace the noisy training data. Pre-trained weights from other datasets are allowed if you disclose them in <code>notes</code>.</td></tr>
+      <tr><td><strong>Honesty</strong></td><td>Set <code>author_type</code> truthfully: <code>human</code>, <code>llm</code> (pipeline fully written by an LLM agent) or <code>hybrid</code>.</td></tr>
+      <tr><td><strong>Pull Requests</strong></td><td>A submission PR may only add the two files in <code>submissions/inbox/&lt;team&gt;/&lt;run_id&gt;/</code>. Anything else is rejected automatically.</td></tr>
+      <tr><td><strong>No manual labelling</strong></td><td>Test predictions must come from an automatic method.</td></tr>
+    </table>
+    <h2>Citation</h2>
+    <p class="muted">If you use this data, cite the MSD: Antonelli M. et al., <em>The Medical Segmentation Decathlon</em>,
+      Nature Communications 13, 4128 (2022), and Simpson A.L. et al., arXiv:1902.09063 (2019).</p>
+  </section>
+</main>
+
+<script>
+(() => {
+  // ---------- theme ----------
+  const root = document.documentElement;
+  try { const t = localStorage.getItem("theme"); if (t) root.dataset.theme = t; } catch (e) {}
+  document.getElementById("themeToggle").addEventListener("click", () => {
+    const dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+    root.dataset.theme = dark ? "light" : "dark";
+    try { localStorage.setItem("theme", root.dataset.theme); } catch (e) {}
+  });
+
+  // ---------- repo link (derived from GitHub Pages URL) ----------
+  const m = location.hostname.match(/^([^.]+)\.github\.io$/);
+  const repoBtn = document.getElementById("repoBtn");
+  if (m) repoBtn.href = `https://github.com/${m[1]}/${location.pathname.split("/").filter(Boolean)[0] || ""}`;
+  else repoBtn.style.display = "none";
+
+  // ---------- tabs ----------
+  const tabs = [...document.querySelectorAll("nav.tabs a")];
+  function show() {
+    const id = (location.hash || "#overview").slice(1);
+    const target = document.getElementById(id) ? id : "overview";
+    document.querySelectorAll("section.tab").forEach(s => s.classList.toggle("active", s.id === target));
+    tabs.forEach(a => a.setAttribute("aria-selected", a.hash === "#" + target));
+  }
+  addEventListener("hashchange", () => { show(); scrollTo({ top: 0 }); });
+  show();
+
+  // ---------- leaderboard ----------
+  function parseCSV(text) {
+    const rows = []; let row = [], f = "", q = false;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (q) { if (c === '"') { if (text[i + 1] === '"') { f += '"'; i++; } else q = false; } else f += c; }
+      else if (c === '"') q = true;
+      else if (c === ",") { row.push(f); f = ""; }
+      else if (c === "\n" || c === "\r") { if (c === "\r" && text[i + 1] === "\n") i++; row.push(f); rows.push(row); row = []; f = ""; }
+      else f += c;
+    }
+    if (f || row.length) { row.push(f); rows.push(row); }
+    const [head, ...body] = rows.filter(r => r.some(x => x !== ""));
+    return body.map(r => Object.fromEntries(head.map((h, i) => [h, r[i] ?? ""])));
+  }
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const cmp = (a, b) => (+b.dice_mean - +a.dice_mean) || (+b.nsd_mean - +a.nsd_mean) || a.submitted_at.localeCompare(b.submitted_at);
+
+  function withRanks(list) {
+    let prev = null, rank = 0;
+    return list.sort(cmp).map((r, i) => {
+      const key = (+r.dice_mean).toFixed(6) + "|" + (+r.nsd_mean).toFixed(6);
+      if (key !== prev) { rank = i + 1; prev = key; }
+      return { ...r, rank };
+    });
+  }
+
+  let all = [], state = { view: "best", author: "", q: "", sort: "rank", dir: 1 };
+
+  function render() {
+    let list;
+    if (state.view === "best") {
+      const best = new Map();
+      [...all].sort(cmp).forEach(r => { const k = r.team.toLowerCase(); if (!best.has(k)) best.set(k, r); });
+      list = withRanks([...best.values()]);
+    } else list = withRanks([...all]);
+
+    if (state.author) list = list.filter(r => r.author_type === state.author);
+    if (state.q) { const q = state.q.toLowerCase(); list = list.filter(r => (r.team + " " + r.model + " " + r.run_id).toLowerCase().includes(q)); }
+    const k = state.sort, num = !["team", "model", "submitted_at"].includes(k);
+    list.sort((a, b) => state.dir * (num ? (k === "rank" ? a.rank - b.rank : +b[k] - +a[k]) : String(a[k]).localeCompare(String(b[k]))));
+
+    const body = document.getElementById("lbBody");
+    if (!list.length) { body.innerHTML = `<tr><td colspan="8" class="empty">${all.length ? "No matching entries." : "No submissions yet. Be the first!"}</td></tr>`; return; }
+    const f4 = x => (+x).toFixed(4);
+    body.innerHTML = list.map(r => `
+      <tr>
+        <td class="num"><span class="rank ${r.rank <= 3 ? "r" + r.rank : ""}">${r.rank}</span></td>
+        <td><div class="team">${esc(r.team)}</div><div class="sub">${esc(r.run_id)} · <span class="chip">${esc(r.author_type)}</span></div></td>
+        <td><div>${esc(r.model)}</div>${r.notes ? `<div class="sub">${esc(r.notes)}</div>` : ""}</td>
+        <td class="num"><strong>${f4(r.dice_mean)}</strong><div class="bar"><i style="width:${Math.max(0, Math.min(100, r.dice_mean * 100))}%"></i></div></td>
+        <td class="num">${f4(r.nsd_mean)}</td>
+        <td class="num">${f4(r.dice_anterior)}</td>
+        <td class="num">${f4(r.dice_posterior)}</td>
+        <td class="sub" style="white-space:nowrap">${esc(r.submitted_at.replace(" UTC", ""))}</td>
+      </tr>`).join("");
+  }
+
+  document.querySelectorAll("[data-view]").forEach(b => b.addEventListener("click", () => {
+    state.view = b.dataset.view; document.querySelectorAll("[data-view]").forEach(x => x.setAttribute("aria-pressed", x === b)); render();
+  }));
+  document.querySelectorAll("[data-author]").forEach(b => b.addEventListener("click", () => {
+    state.author = b.dataset.author; document.querySelectorAll("[data-author]").forEach(x => x.setAttribute("aria-pressed", x === b)); render();
+  }));
+  document.getElementById("q").addEventListener("input", e => { state.q = e.target.value.trim(); render(); });
+  document.querySelectorAll("th[data-sort]").forEach(th => th.addEventListener("click", () => {
+    const k = th.dataset.sort; state.dir = state.sort === k ? -state.dir : 1; state.sort = k; render();
+  }));
+
+  fetch("leaderboard.csv", { cache: "no-store" })
+    .then(r => { if (!r.ok) throw new Error(r.status); return r.text(); })
+    .then(t => {
+      all = parseCSV(t);
+      const teams = new Set(all.map(r => r.team.toLowerCase())).size;
+      document.getElementById("teamsBadge").textContent = `${teams} team${teams === 1 ? "" : "s"}`;
+      render();
+    })
+    .catch(() => {
+      document.getElementById("lbBody").innerHTML =
+        `<tr><td colspan="8" class="empty">Could not load leaderboard.csv. If you opened this file directly, serve it instead: <code>python -m http.server -d docs</code></td></tr>`;
+    });
+})();
+</script>
+</body>
+</html>

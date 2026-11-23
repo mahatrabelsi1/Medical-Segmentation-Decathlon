@@ -1,0 +1,45 @@
+name: Rebuild leaderboard (manual)
+
+# Re-scores every archived submission in submissions/scored/ (e.g. after a metric fix).
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: leaderboard-update
+  cancel-in-progress: false
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - run: pip install --quiet numpy scipy cryptography
+
+      - name: Rebuild
+        env:
+          SUBMISSION_PRIVATE_KEY: ${{ secrets.SUBMISSION_PRIVATE_KEY }}
+        run: |
+          set -e
+          umask 077
+          printf '%s\n' "$SUBMISSION_PRIVATE_KEY" > "$RUNNER_TEMP/key.pem"
+          python scoring/rebuild_leaderboard.py --private-key "$RUNNER_TEMP/key.pem"
+          rm -f "$RUNNER_TEMP/key.pem"
+
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add leaderboard docs/leaderboard.csv
+          git diff --cached --quiet && echo "No changes." && exit 0
+          git commit -m "Rebuild leaderboard"
+          git push origin HEAD:main

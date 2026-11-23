@@ -1,0 +1,28 @@
+{
+  "name": "HippoSeg Decathlon",
+  "source": "Medical Segmentation Decathlon - Task04_Hippocampus (http://medicaldecathlon.com)",
+  "description": "Left and right hippocampus segmentation",
+  "reference": " Vanderbilt University Medical Center",
+  "licence": "CC-BY-SA 4.0",
+  "modality": {
+    "0": "MRI"
+  },
+  "labels": {
+    "0": "background",
+    "1": "anterior",
+    "2": "posterior"
+  },
+  "numTrain": 182,
+  "numVal": 26,
+  "numTest": 52,
+  "noise": {
+    "images": "all images (train/val/test): MRI bias field + Rician noise, per-case noise level",
+    "labels": "46 of 182 TRAIN labels randomly eroded/dilated by 1 voxel; val/test labels clean",
+    "rician_sigma_range": [
+      0.02,
+      0.1
+    ],
+    "bias_field_strength": 0.25,
+    "train_label_noise_fraction": 0.25
+  }
+}

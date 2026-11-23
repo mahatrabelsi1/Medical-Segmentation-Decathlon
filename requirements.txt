@@ -1,0 +1,8 @@
+# Scoring / submission tooling
+numpy>=1.24
+scipy>=1.10
+nibabel>=5.0
+cryptography>=41.0
+
+# Only needed for the starter baseline (starter/baseline_unet.py)
+# torch>=2.1
