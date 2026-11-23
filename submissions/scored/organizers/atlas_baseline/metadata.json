@@ -1,7 +1,0 @@
-{
-  "team": "organizers",
-  "run_id": "atlas_baseline",
-  "author_type": "human",
-  "model": "Majority-vote label atlas (no training)",
-  "notes": "Workflow test: per-voxel majority label over training masks, no learning."
-}

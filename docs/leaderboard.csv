@@ -1,2 +1,1 @@
 team,run_id,author_type,model,notes,dice_mean,nsd_mean,dice_anterior,dice_posterior,nsd_anterior,nsd_posterior,submitted_at
-organizers,atlas_baseline,human,Majority-vote label atlas (no training),"Workflow test: per-voxel majority label over training masks, no learning.",0.530629,0.468099,0.615619,0.445639,0.513017,0.423182,2026-11-23 12:24:39 UTC
