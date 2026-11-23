@@ -28,7 +28,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "encryption"))
 from common import (HIDDEN_LABELS_ENC, ROOT, SubmissionError, foreground_labels,  # noqa: E402
                     load_config, load_npz_masks, read_test_cases)
-from crypto import decrypt_bytes  # noqa: E402
+from crypto import decrypt_bytes, normalize_pem  # noqa: E402
 from leaderboard import best_per_team, read_rows, write_all  # noqa: E402
 from metrics import score_cases  # noqa: E402
 from validate_metadata import validate_metadata  # noqa: E402
@@ -43,7 +43,20 @@ def _check_file(p: Path, max_bytes: int) -> None:
         raise SubmissionError(f"{p.name} is larger than {max_bytes} bytes")
 
 
+def check_server_key(private_key: bytes) -> None:
+    """Fail loudly (as an organizer problem) if the secret is not the pair of the committed public key."""
+    from cryptography.hazmat.primitives import serialization
+    try:
+        pub = serialization.load_pem_private_key(normalize_pem(private_key), password=None).public_key().public_bytes(
+            serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo)
+    except Exception:
+        raise RuntimeError("SUBMISSION_PRIVATE_KEY secret is not a valid unencrypted PEM private key")
+    if pub.strip() != (ROOT / "encryption" / "public_key.pem").read_bytes().strip():
+        raise RuntimeError("SUBMISSION_PRIVATE_KEY secret does not match encryption/public_key.pem")
+
+
 def evaluate(run_dir: Path, private_key: bytes, archive: bool = True) -> dict:
+    check_server_key(private_key)
     cfg = load_config()
     if run_dir.is_symlink() or run_dir.parent.is_symlink():
         raise SubmissionError("Submission folders must not be symlinks")
@@ -113,6 +126,10 @@ def main() -> None:
         code = 0
     except SubmissionError as e:
         result, code = {"status": "error", "message": str(e)}, 1
+    except RuntimeError as e:
+        print(f"ORGANIZER CONFIG ERROR: {e}")
+        result, code = {"status": "error", "message": "Scoring server misconfigured (organizer key problem), "
+                        "not your submission. An organizer will fix it and re-run."}, 1
     except Exception:
         traceback.print_exc()
         result, code = {"status": "error", "message": "Internal scoring error - an organizer will take a look."}, 1
